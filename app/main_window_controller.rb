@@ -148,6 +148,10 @@ class MainWindowController < NSWindowController
     }
   end
 
+  def userNotificationCenter(center, shouldPresentNotification:notification)
+    return true
+  end
+
   def userNotificationCenter(center, didActivateNotification:notification)
     debug "userNotificationCenter:didActivateNotification"
     info = notification.userInfo
