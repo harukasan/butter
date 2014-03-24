@@ -1,4 +1,4 @@
-class MainWindowController < NSWindowController
+class MainController < NSWindowController
   Host = "idobata.io"
   NotificationModeKey = 'notificationMode'
 

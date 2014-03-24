@@ -6,7 +6,7 @@ class AppDelegate
       styleMask: NSTitledWindowMask|NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask,
       backing: NSBackingStoreBuffered,
       defer: false)
-    @main = MainWindowController.new(window)
+    @main = MainController.new(window)
   end
 
   def applicationShouldTerminateAfterLastWindowClosed(app)
