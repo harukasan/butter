@@ -1,40 +1,44 @@
 class MainWindowController < NSWindowController
-  HOST = "idobata.io"
+  Host = "idobata.io"
+  NotificationModeKey = 'notificationMode'
 
   def self.isSelectorExcludedFromWebScript(selector)
     case selector.to_s
     when "notify:"
       return false
+    when "notificationMode"
+      return false
+    else
+      return true
     end
-    return true
   end
 
   def self.webScriptNameForSelector(selector)
     case selector.to_s
     when "notify:"
       return "notify"
+    when "notificationMode"
+      return "notificationMode"
     end
   end
 
   def initialize(window)
     initWithWindow window
-    initWindow
+    window.tap do |w|
+      w.title = NSBundle.mainBundle.infoDictionary['CFBundleName']
+      w.orderFrontRegardless
+      w.center
+      w.setOneShot true
+      w.setReleasedWhenClosed false
+      w.setCollectionBehavior NSWindowCollectionBehaviorFullScreenPrimary
+    end
     initWebView
 
     self
   end
 
-  def initWindow
-    window.title = NSBundle.mainBundle.infoDictionary['CFBundleName']
-    window.orderFrontRegardless
-    window.center
-    window.setOneShot true
-    window.setReleasedWhenClosed false
-    window.setCollectionBehavior NSWindowCollectionBehaviorFullScreenPrimary
-  end
-
   def initWebView
-    rect =NSMakeRect(0, 0, window.contentView.frame.size.width, window.contentView.frame.size.height)
+    rect = NSMakeRect(0, 0, window.contentView.frame.size.width, window.contentView.frame.size.height)
     @web_view = WebView.alloc.initWithFrame rect
     @web_view.setAutoresizingMask(NSViewMinXMargin|NSViewMaxXMargin|NSViewMinYMargin|NSViewMaxYMargin|NSViewWidthSizable|NSViewHeightSizable)
     window.contentView.addSubview @web_view
@@ -51,27 +55,38 @@ class MainWindowController < NSWindowController
   def notify(data)
     data = BW::JSON.parse data.to_s.dataUsingEncoding(NSUTF8StringEncoding)
 
-    notification = NSUserNotification.alloc.init
-    notification.title = data['sender_name']
-    notification.informativeText = data['body_plain']
-    notification.soundName = NSUserNotificationDefaultSoundName
-    notification.userInfo = data
+    notification = NSUserNotification.alloc.init.tap do |n|
+      n.title = data['sender_name']
+      n.informativeText = data['body_plain']
+      n.soundName = NSUserNotificationDefaultSoundName
+      n.userInfo = data
+    end
 
     sender_icon_url = data['sender_icon_url']
     if sender_icon_url.length > 0
       notification.contentImage = fetchIconImage sender_icon_url
     end
 
-    center = NSUserNotificationCenter.defaultUserNotificationCenter
-    center.delegate = self
-    center.deliverNotification notification
+    NSUserNotificationCenter.defaultUserNotificationCenter.tap do |center|
+      center.delegate = self
+      center.deliverNotification notification
+    end
+  end
+
+  def notificationMode
+    user_defaults = NSUserDefaults.standardUserDefaults
+    mode = user_defaults.integerForKey NotificationModeKey
+
+    return case mode
+    when 1 then "all"
+    when 2 then "mention"
+    when 3 then "off"
+    end
   end
 
   def fetchIconImage(url)
     icon_size = NSMakeSize(48, 48)
-    if url.substringToIndex(1) == "/"
-      url = "https://#{HOST}#{url}"
-    end
+    url = "https://#{Host}#{url}" if url.substringToIndex(1) == "/"
     raw_image = NSImage.alloc.initWithContentsOfURL NSURL.URLWithString(url)
     image = NSImage.alloc.initWithSize icon_size
 
@@ -85,7 +100,6 @@ class MainWindowController < NSWindowController
   end
 
   def locateToRoom(organization, room_name)
-    debug "locateToRoom"
     window_object = @web_view.windowScriptObject
     window_object.evaluateWebScript <<-CODE
       location.href = "#/organization/#{organization}/room/#{room_name}";
@@ -93,45 +107,54 @@ class MainWindowController < NSWindowController
     @web_view.display
   end
 
+  # called when frame loading finished
   def webView(sender, didFinishLoadForFrame:frame)
-    window_object = sender.windowScriptObject
-    window_object.evaluateWebScript <<-CODE
-      setTimeout(function(){
-        window.Idobata.pusher.bind('message_created', function(data){
-          if (data.message.mentions.indexOf(parseInt(window.Idobata.user.id)) >= 0) {
+    sender.windowScriptObject.evaluateWebScript <<-CODE
+      var onMessageCreated = function(data){
+        var notify = false;
+        var mode = window.butter.notificationMode();
+        if (mode == "all") {
+            notify = true;
+        } else if (mode == "mention") {
+            if (data.message.mentions.indexOf(parseInt(window.Idobata.user.id)) >= 0) {
+              notify = true;
+            }
+        }
+        if (notify) {
             butter.notify(JSON.stringify(data.message));
-          }
-        });
+        }
+      };
+
+      setTimeout(function(){
+        window.Idobata.pusher.bind('message_created', onMessageCreated);
       }, 1000);
     CODE
   end
 
+  # called when window object is cleared
   def webView(sender, didClearWindowObject:window_object, forFrame:frame)
-    debug "webView:didClearWindowObject:forFrame"
     window_object.setValue self, forKey:"butter"
   end
 
   # requested a new window
   def webView(sender, createWebViewWithRequest:request)
-    debug "webview:createWebViewWithRequest"
     return sender # return own window
   end
 
   def webView(sender, decidePolicyForNavigationAction:info, request:request, frame:frame, decisionListener:listener)
-    debug "webview:decidePolicyForNewWindowAction"
     host = request.URL.host
-    return listener.use if !host or host == HOST
+    return listener.use if !host or host == Host
 
     NSWorkspace.sharedWorkspace.openURL request.URL
     listener.ignore
   end
 
   def webView(sender, decidePolicyForNewWindowAction:info, request:request, frame:frame, decisionListener:listener)
-    debug "webview:decidePolicyForNewWindowAction"
     NSWorkspace.sharedWorkspace.openURL request.URL
   end
 
   def webView(sender, runJavaScriptAlertPanelWithMessage:message, initiatedByFrame:frame)
+    puts "ALERT: #{message}"
     NSRunAlertPanel "alert", message, "OK", nil, nil
   end
 
@@ -153,7 +176,6 @@ class MainWindowController < NSWindowController
   end
 
   def userNotificationCenter(center, didActivateNotification:notification)
-    debug "userNotificationCenter:didActivateNotification"
     info = notification.userInfo
     locateToRoom info["organization_slug"], info["room_name"]
   end

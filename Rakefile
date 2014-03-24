@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 $:.unshift("/Library/RubyMotion/lib")
 require 'motion/project/template/osx'
-require 'bubble-wrap'
 
 begin
   require 'bundler'
   Bundler.require
 rescue LoadError
 end
+
+require 'bubble-wrap'
+require 'ib'
 
 Motion::Project::App.setup do |app|
   # Use `rake config' to see complete project settings.
@@ -17,4 +19,5 @@ Motion::Project::App.setup do |app|
   app.identifier = 'jp.harukasan.butter'
   app.version = '0.0.1'
   app.frameworks << 'WebKit'
+  app.libs << "-fobjc-arc"
 end
