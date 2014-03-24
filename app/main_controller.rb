@@ -178,5 +178,6 @@ class MainController < NSWindowController
   def userNotificationCenter(center, didActivateNotification:notification)
     info = notification.userInfo
     locateToRoom info["organization_slug"], info["room_name"]
+    center.removeDeliveredNotification notification
   end
 end
