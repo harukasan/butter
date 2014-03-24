@@ -30,6 +30,7 @@ class MainWindowController < NSWindowController
     window.center
     window.setOneShot true
     window.setReleasedWhenClosed false
+    window.setCollectionBehavior NSWindowCollectionBehaviorFullScreenPrimary
   end
 
   def initWebView
