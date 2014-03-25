@@ -59,7 +59,7 @@ class MainController < NSWindowController
       n.title = data['sender_name']
       n.informativeText = data['body_plain']
       n.soundName = NSUserNotificationDefaultSoundName
-      n.userInfo = data
+      n.userInfo = data.reject{|k,v| v.nil? }
     end
 
     sender_icon_url = data['sender_icon_url']
