@@ -114,24 +114,36 @@ class MainController < NSWindowController
   # called when frame loading finished
   def webView(sender, didFinishLoadForFrame:frame)
     sender.windowScriptObject.evaluateWebScript <<-CODE
-      var onMessageCreated = function(data){
-        var notify = false;
-        var mode = window.butter.notificationMode();
-        if (mode == "all") {
+      (function(){
+        var onMessageCreated = function(data){
+          var notify = false;
+          var mode = window.butter.notificationMode();
+          if (mode == "all") {
             notify = true;
-        } else if (mode == "mention") {
+          } else if (mode == "mention") {
             if (data.message.mentions.indexOf(parseInt(window.Idobata.user.id)) >= 0) {
               notify = true;
             }
-        }
-        if (notify) {
+          }
+          if (notify) {
             butter.notify(JSON.stringify(data.message));
-        }
-      };
+          }
+        };
 
-      setTimeout(function(){
-        window.Idobata.pusher.bind('message_created', onMessageCreated);
-      }, 1000);
+        var bindEvent = function(){
+          if (!window.Idobata.pusher) {
+            return false;
+          }
+          window.Idobata.pusher.bind('message_created', onMessageCreated);
+          return true;
+        };
+
+        setTimeout(function setBind(){
+          if (!bindEvent()) {
+            setTimeout(setBind, 100);
+          }
+        }, 100);
+      })();
     CODE
   end
 
