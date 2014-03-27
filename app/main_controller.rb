@@ -162,6 +162,11 @@ class MainController < NSWindowController
     NSRunAlertPanel "alert", message, "OK", nil, nil
   end
 
+  def webView(sender, runJavaScriptConfirmPanelWithMessage:message, initiatedByFrame:frame)
+    result = NSRunAlertPanel "confirm", message, "OK", "Cancel", nil
+    return (result == NSAlertDefaultReturn)
+  end
+
   def webView(sender, runOpenPanelForFileButtonWithResultListener:listener)
     dialog = NSOpenPanel.openPanel
     dialog.setCanChooseFiles true
