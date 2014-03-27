@@ -56,7 +56,7 @@ class MainController < NSWindowController
     data = BW::JSON.parse data.to_s.dataUsingEncoding(NSUTF8StringEncoding)
 
     notification = NSUserNotification.alloc.init.tap do |n|
-      n.title = data['sender_name']
+      n.title = "#{data['sender_name']} \u25b8 #{data['room_name']}"
       n.informativeText = data['body_plain']
       n.soundName = NSUserNotificationDefaultSoundName
       keys = [
