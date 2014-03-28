@@ -22,3 +22,22 @@ Motion::Project::App.setup do |app|
   app.version = '0.1.2'
   app.frameworks << 'WebKit'
 end
+
+namespace :archive do
+  desc "Create a .dmg archive"
+  task :dmg do
+    Rake::Task['build:release'].invoke
+
+    config = Motion::Project::App.config
+    dmg_name = "#{config.name}_#{config.version}"
+
+    sh "rm -rf build/Release"
+    sh "rm -f build/#{dmg_name}.dmg"
+    sh "rsync -a build/MacOSX-#{config.deployment_target}-Release/#{config.name}.app build/Release"
+    sh "ln -sf /Applications build/Release"
+
+    sh "hdiutil create build/tmp.dmg -volname #{dmg_name} -srcfolder build/Release"
+    sh "hdiutil convert -format UDBZ build/tmp.dmg -o build/#{dmg_name}.dmg"
+    sh "rm -f build/tmp.dmg"
+  end
+end
