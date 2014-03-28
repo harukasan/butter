@@ -8,6 +8,8 @@ class MainController < NSWindowController
       return false
     when "notificationMode"
       return false
+    when "badge:"
+      return false
     else
       return true
     end
@@ -19,6 +21,8 @@ class MainController < NSWindowController
       return "notify"
     when "notificationMode"
       return "notificationMode"
+    when "badge:"
+      return "badge"
     end
   end
 
@@ -88,6 +92,10 @@ class MainController < NSWindowController
     end
   end
 
+  def badge(label)
+    NSApplication.sharedApplication.dockTile.setBadgeLabel label
+  end
+
   def fetchIconImage(url)
     icon_size = NSMakeSize(48, 48)
     url = "https://#{Host}#{url}" if url.substringToIndex(1) == "/"
@@ -115,6 +123,24 @@ class MainController < NSWindowController
   def webView(sender, didFinishLoadForFrame:frame)
     sender.windowScriptObject.evaluateWebScript <<-CODE
       (function(){
+        var totalUnreadCount = function () {
+          return window._.reduce(window.jQuery('.joined-rooms .unread-count'), function (s, e) { return s + +$(e).text(); }, 0);
+        };
+
+        var unreadCountBadge = function () {
+          var count = totalUnreadCount();
+          return count == 0 ? '' : '' + count;
+        };
+
+        var prevBadge = "";
+        setInterval(function () {
+          var badge = unreadCountBadge();
+          if (prevBadge != badge) {
+            prevBadge = badge;
+            window.butter.badge(badge);
+          }
+        }, 100);
+
         var onMessageCreated = function(data){
           var notify = false;
           var mode = window.butter.notificationMode();
