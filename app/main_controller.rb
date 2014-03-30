@@ -32,6 +32,7 @@ class MainController < NSWindowController
       w.setReleasedWhenClosed false
       w.setCollectionBehavior NSWindowCollectionBehaviorFullScreenPrimary
     end
+    setWindowFrameAutosaveName "MainWindow"
     initWebView
 
     self
