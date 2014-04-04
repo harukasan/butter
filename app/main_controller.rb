@@ -94,7 +94,8 @@ class MainController < NSWindowController
   end
 
   def setBadge(label)
-    NSApplication.sharedApplication.dockTile.setBadgeLabel label.to_i.to_s
+    label = (label.to_i == 0) ? "" : label.to_i.to_s
+    NSApplication.sharedApplication.dockTile.setBadgeLabel label
   end
 
   def fetchIconImage(url)
