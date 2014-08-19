@@ -182,6 +182,10 @@ class MainController < NSWindowController
 
   def webView(sender, decidePolicyForNavigationAction:info, request:request, frame:frame, decisionListener:listener)
     host = request.URL.host
+
+    # ignore on navigate to local file (idobata.io is not supported local file link)
+    return listener.ignore if request.URL.isFileURL
+
     return listener.use if !host or host == Host
 
     NSWorkspace.sharedWorkspace.openURL request.URL
