@@ -213,6 +213,7 @@ class MainController < NSWindowController
 
     dialog.beginSheetModalForWindow window, completionHandler: Proc.new {|result|
       files = dialog.filenames
+      break listener.cancel unless result == NSOKButton
       break listener.cancel unless files.size > 0
       filename = files.objectAtIndex 0
       listener.chooseFilename filename
