@@ -125,47 +125,37 @@ class MainController < NSWindowController
   def webView(sender, didFinishLoadForFrame:frame)
     sender.windowScriptObject.evaluateWebScript <<-CODE
       (function(){
-        var onMessageCreated = function(data){
-          var notify = false;
-          var mode = window.butter.notificationMode();
-          if (mode == "all") {
-            notify = true;
-          } else if (mode == "mention") {
-            if (data.message.mentions.indexOf(parseInt(window.Idobata.user.id)) >= 0) {
+        var onMessageCreated = function(user) {
+          return function(data){
+            var notify = false;
+            var mode = window.butter.notificationMode();
+            if (mode == "all") {
               notify = true;
+            } else if (mode == "mention") {
+              if (data.message.mentions.indexOf(parseInt(user.get('id'))) >= 0) {
+                notify = true;
+              }
             }
-          }
-          if (notify) {
-            butter.notify(JSON.stringify(data.message));
-          }
+            if (notify) {
+              butter.notify(JSON.stringify(data.message));
+            }
+          };
         };
 
         var onUnreadCountUpdated = function() {
-          var totalUnreadCount = this.get('rooms').reduce(function(acc, room) {
-            return acc + room.get('unreadMessagesCount');
-          }, 0);
-          window.butter.setBadge(totalUnreadCount);
+          window.butter.setBadge(this.get('totalUnreadMessagesCount'));
         }
 
-        var bindEvent = function(){
-          if (!window.Idobata.pusher) {
-            return false;
-          }
-          if (!window.Idobata.user) {
-            return false;
-          }
-          window.Idobata.pusher.bind('message_created', onMessageCreated);
-          window.Idobata.user.addObserver('rooms.@each.unreadMessagesCount', onUnreadCountUpdated);
-          onUnreadCountUpdated.apply(window.Idobata.user);
+        window.addEventListener('ready.idobata', function(e) {
+          var container = e.detail.container;
 
-          return true;
-        };
+          var pusher = container.lookup('pusher:main');
+          var user   = container.lookup('service:session').get('user');
 
-        setTimeout(function setBind(){
-          if (!bindEvent()) {
-            setTimeout(setBind, 100);
-          }
-        }, 100);
+          pusher.bind('message:created', onMessageCreated(user));
+          user.addObserver('totalUnreadMessagesCount', onUnreadCountUpdated);
+          onUnreadCountUpdated.apply(user);
+        });
       })();
     CODE
   end
