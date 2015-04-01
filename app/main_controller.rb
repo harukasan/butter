@@ -61,20 +61,16 @@ class MainController < NSWindowController
     data = BW::JSON.parse data.to_s.dataUsingEncoding(NSUTF8StringEncoding)
 
     notification = NSUserNotification.alloc.init.tap do |n|
-      n.title = "#{data['sender_name']} \u25b8 #{data['room_name']}"
-      n.informativeText = data['body_plain']
+      n.title = "#{data['senderName']} \u25b8 #{data['room']['name']}"
+      n.informativeText = data['bodyPlain']
       n.soundName = NSUserNotificationDefaultSoundName
-      keys = [
-        "organization_slug",
-        "room_name",
-      ]
-      n.userInfo = data.select {|key, val| keys.include? key }
+      n.userInfo = {"room_name" => data['room']['name']}
     end
 
-    sender_icon_url = data['sender_icon_url']
-    if sender_icon_url.length > 0
-      notification.contentImage = fetchIconImage sender_icon_url
-    end
+   sender_icon_url = data['senderIconUrl']
+   if sender_icon_url
+     notification.contentImage = fetchIconImage sender_icon_url
+   end
 
     NSUserNotificationCenter.defaultUserNotificationCenter.tap do |center|
       center.delegate = self
@@ -122,7 +118,7 @@ class MainController < NSWindowController
   end
 
   # called when frame loading finished
-  def webView(sender, didFinishLoadForFrame:frame)
+  def webView(sender, didStartProvisionalLoadForFrame:frame)
     sender.windowScriptObject.evaluateWebScript <<-CODE
       (function(){
         var onMessageCreated = function(user) {
@@ -137,7 +133,7 @@ class MainController < NSWindowController
               }
             }
             if (notify) {
-              butter.notify(JSON.stringify(data.message));
+              window.butter.notify(JSON.stringify(data.message));
             }
           };
         };
