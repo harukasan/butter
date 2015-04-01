@@ -52,7 +52,7 @@ class MainController < NSWindowController
     @web_view.setUIDelegate self
     @web_view.setPolicyDelegate self
 
-    url = NSURL.URLWithString "https://idobata.io/users/sign_in"
+    url = NSURL.URLWithString "https://idobata.io/#/"
     request = NSURLRequest.requestWithURL url
     @web_view.mainFrame.loadRequest request
   end
