@@ -121,8 +121,13 @@ class MainController < NSWindowController
   def webView(sender, didStartProvisionalLoadForFrame:frame)
     sender.windowScriptObject.evaluateWebScript <<-CODE
       (function(){
-        var onMessageCreated = function(user) {
+        var onMessageCreated = function(user, store, router) {
           return function(data){
+            store.find('message', data.message.id).then(function(message) {
+              alert(message);
+              alert(router.generate('room.index', message.get('room.organization'), message.get('room')));
+            });
+
             var notify = false;
             var mode = window.butter.notificationMode();
             if (mode == "all") {
@@ -147,8 +152,10 @@ class MainController < NSWindowController
 
           var pusher = container.lookup('pusher:main');
           var user   = container.lookup('service:session').get('user');
+          var store  = container.lookup('store:main');
+          var router = container.lookup('router:main');
 
-          pusher.bind('message:created', onMessageCreated(user));
+          pusher.bind('message:created', onMessageCreated(user, store, router));
           user.addObserver('totalUnreadMessagesCount', onUnreadCountUpdated);
           onUnreadCountUpdated.apply(user);
         });
@@ -184,7 +191,7 @@ class MainController < NSWindowController
 
   def webView(sender, runJavaScriptAlertPanelWithMessage:message, initiatedByFrame:frame)
     puts "ALERT: #{message}"
-    NSRunAlertPanel "alert", message, "OK", nil, nil
+    # NSRunAlertPanel "alert", message, "OK", nil, nil
   end
 
   def webView(sender, runJavaScriptConfirmPanelWithMessage:message, initiatedByFrame:frame)

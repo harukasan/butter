@@ -19,7 +19,7 @@ Motion::Project::App.setup do |app|
   app.name = 'Butter'
   app.icon = 'icon.icns'
   app.identifier = 'jp.harukasan.butter'
-  app.version = '0.1.5'
+  app.version = '0.2.0.beta1'
   app.frameworks << 'WebKit'
 end
 
