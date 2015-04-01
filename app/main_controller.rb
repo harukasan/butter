@@ -61,13 +61,13 @@ class MainController < NSWindowController
     data = BW::JSON.parse data.to_s.dataUsingEncoding(NSUTF8StringEncoding)
 
     notification = NSUserNotification.alloc.init.tap do |n|
-      n.title = "#{data['senderName']} \u25b8 #{data['room']['name']}"
-      n.informativeText = data['bodyPlain']
+      n.title = "#{data['sender']} \u25b8 #{data['roomName']}"
+      n.informativeText = data['text']
       n.soundName = NSUserNotificationDefaultSoundName
-      n.userInfo = {"room_name" => data['room']['name']}
+      n.userInfo = { "url" => data['url'] }
     end
 
-   sender_icon_url = data['senderIconUrl']
+   sender_icon_url = data['iconUrl']
    if sender_icon_url
      notification.contentImage = fetchIconImage sender_icon_url
    end
@@ -109,10 +109,10 @@ class MainController < NSWindowController
     return image
   end
 
-  def locateToRoom(organization, room_name)
+  def locateTo(url)
     window_object = @web_view.windowScriptObject
     window_object.evaluateWebScript <<-CODE
-      location.href = "#/organization/#{organization}/room/#{room_name}";
+      location.href = '#{url}';
     CODE
     @web_view.display
   end
@@ -121,7 +121,7 @@ class MainController < NSWindowController
   def webView(sender, didStartProvisionalLoadForFrame:frame)
     sender.windowScriptObject.evaluateWebScript <<-CODE
       (function(){
-        var onMessageCreated = function(user) {
+        var onMessageCreated = function(user, store, router) {
           return function(data){
             var notify = false;
             var mode = window.butter.notificationMode();
@@ -133,7 +133,18 @@ class MainController < NSWindowController
               }
             }
             if (notify) {
-              window.butter.notify(JSON.stringify(data.message));
+              store.find('message', data.message.id).then(function(message) {
+                var roomUrl = '/' + router.generate('room.index', message.get('room'));
+                var roomName = message.get('room.organization.name').toString() + ' / ' + message.get('room.name').toString();
+                var payload = {
+                  sender: data.message.senderName,
+                  roomName: roomName,
+                  text: data.message.bodyPlain,
+                  iconUrl: data.message.senderIconUrl,
+                  url: roomUrl
+                };
+                window.butter.notify(JSON.stringify(payload));
+              });
             }
           };
         };
@@ -147,8 +158,10 @@ class MainController < NSWindowController
 
           var pusher = container.lookup('pusher:main');
           var user   = container.lookup('service:session').get('user');
+          var store  = container.lookup('store:main');
+          var router = container.lookup('router:main');
 
-          pusher.bind('message:created', onMessageCreated(user));
+          pusher.bind('message:created', onMessageCreated(user, store, router));
           user.addObserver('totalUnreadMessagesCount', onUnreadCountUpdated);
           onUnreadCountUpdated.apply(user);
         });
@@ -184,7 +197,7 @@ class MainController < NSWindowController
 
   def webView(sender, runJavaScriptAlertPanelWithMessage:message, initiatedByFrame:frame)
     puts "ALERT: #{message}"
-    NSRunAlertPanel "alert", message, "OK", nil, nil
+    # NSRunAlertPanel "alert", message, "OK", nil, nil
   end
 
   def webView(sender, runJavaScriptConfirmPanelWithMessage:message, initiatedByFrame:frame)
@@ -212,7 +225,7 @@ class MainController < NSWindowController
 
   def userNotificationCenter(center, didActivateNotification:notification)
     info = notification.userInfo
-    locateToRoom info["organization_slug"], info["room_name"]
+    locateTo info['url']
     center.removeDeliveredNotification notification
   end
 end
