@@ -185,7 +185,7 @@ class MainController < NSWindowController
     # ignore on navigate to local file (idobata.io is not supported local file link)
     return listener.ignore if request.URL.isFileURL
 
-    return listener.use if !host or host == Host
+    return listener.use if !host or host == Host or sender.mainFrame != frame
 
     NSWorkspace.sharedWorkspace.openURL request.URL
     listener.ignore
