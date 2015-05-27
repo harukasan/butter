@@ -157,13 +157,21 @@ class MainController < NSWindowController
           var container = e.detail.container;
 
           var pusher = container.lookup('pusher:main');
-          var user   = container.lookup('service:session').get('user');
           var store  = container.lookup('store:main');
           var router = container.lookup('router:main');
+          var session = container.lookup('service:session');
 
-          pusher.bind('message:created', onMessageCreated(user, store, router));
-          user.addObserver('totalUnreadMessagesCount', onUnreadCountUpdated);
-          onUnreadCountUpdated.apply(user);
+          session.addObserver('user', function() {
+            var user = this.get('user');
+            if (!user) {
+              return;
+            }
+
+            this.addObserver('totalUnreadMessagesCount', onUnreadCountUpdated);
+            onUnreadCountUpdated.apply(user);
+            pusher.bind('message:created', onMessageCreated(user, store, router));
+          });
+
         });
       })();
     CODE
