@@ -39,6 +39,7 @@ class MainController < NSWindowController
     setWindowFrameAutosaveName "MainWindow"
     initWebView
 
+    NSUserNotificationCenter.defaultUserNotificationCenter.delegate = self
     self
   end
 
@@ -67,15 +68,11 @@ class MainController < NSWindowController
       n.userInfo = { "url" => data['url'] }
     end
 
-   sender_icon_url = data['iconUrl']
-   if sender_icon_url
-     notification.contentImage = fetchIconImage sender_icon_url
-   end
-
-    NSUserNotificationCenter.defaultUserNotificationCenter.tap do |center|
-      center.delegate = self
-      center.deliverNotification notification
+    sender_icon_url = data['iconUrl']
+    if sender_icon_url
+      notification.contentImage = fetchIconImage sender_icon_url
     end
+    NSUserNotificationCenter.defaultUserNotificationCenter.deliverNotification notification
   end
 
   def notificationMode
