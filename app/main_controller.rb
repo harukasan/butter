@@ -39,6 +39,7 @@ class MainController < NSWindowController
     setWindowFrameAutosaveName "MainWindow"
     initWebView
 
+    NSUserNotificationCenter.defaultUserNotificationCenter.delegate = self
     self
   end
 
@@ -67,15 +68,11 @@ class MainController < NSWindowController
       n.userInfo = { "url" => data['url'] }
     end
 
-   sender_icon_url = data['iconUrl']
-   if sender_icon_url
-     notification.contentImage = fetchIconImage sender_icon_url
-   end
-
-    NSUserNotificationCenter.defaultUserNotificationCenter.tap do |center|
-      center.delegate = self
-      center.deliverNotification notification
+    sender_icon_url = data['iconUrl']
+    if sender_icon_url
+      notification.contentImage = fetchIconImage sender_icon_url
     end
+    NSUserNotificationCenter.defaultUserNotificationCenter.deliverNotification notification
   end
 
   def notificationMode
@@ -121,32 +118,30 @@ class MainController < NSWindowController
   def webView(sender, didStartProvisionalLoadForFrame:frame)
     sender.windowScriptObject.evaluateWebScript <<-CODE
       (function(){
-        var onMessageCreated = function(user, store, router) {
-          return function(data){
-            var notify = false;
-            var mode = window.butter.notificationMode();
-            if (mode == "all") {
+        var onMessageCreated = function(user, store, router, data) {
+          var notify = false;
+          var mode = window.butter.notificationMode();
+          if (mode == "all") {
+            notify = true;
+          } else if (mode == "mention") {
+            if (data.message.mentions.indexOf(parseInt(user.get('id'))) >= 0) {
               notify = true;
-            } else if (mode == "mention") {
-              if (data.message.mentions.indexOf(parseInt(user.get('id'))) >= 0) {
-                notify = true;
-              }
             }
-            if (notify) {
-              store.find('message', data.message.id).then(function(message) {
-                var roomUrl = '/' + router.generate('room.index', message.get('room'));
-                var roomName = message.get('room.organization.name').toString() + ' / ' + message.get('room.name').toString();
-                var payload = {
-                  sender: data.message.senderName,
-                  roomName: roomName,
-                  text: data.message.bodyPlain,
-                  iconUrl: data.message.senderIconUrl,
-                  url: roomUrl
-                };
-                window.butter.notify(JSON.stringify(payload));
-              });
-            }
-          };
+          }
+          if (notify) {
+            store.find('message', data.message.id).then(function(message) {
+              var roomUrl = '/' + router.generate('room.index', message.get('room'));
+              var roomName = message.get('room.organization.name').toString() + ' / ' + message.get('room.name').toString();
+              var payload = {
+                sender: data.message.sender_name,
+                roomName: roomName,
+                text: data.message.body_plain,
+                iconUrl: data.message.sender_icon_url,
+                url: roomUrl
+              };
+              window.butter.notify(JSON.stringify(payload));
+            });
+          }
         };
 
         var onUnreadCountUpdated = function() {
@@ -155,15 +150,30 @@ class MainController < NSWindowController
 
         window.addEventListener('ready.idobata', function(e) {
           var container = e.detail.container;
+          var session = container.lookup('service:session');
 
-          var pusher = container.lookup('pusher:main');
-          var user   = container.lookup('service:session').get('user');
-          var store  = container.lookup('store:main');
-          var router = container.lookup('router:main');
+          session.addObserver('user', function() {
+            var user = this.get('user');
+            if (!user) {
+              return;
+            }
 
-          pusher.bind('message:created', onMessageCreated(user, store, router));
-          user.addObserver('totalUnreadMessagesCount', onUnreadCountUpdated);
-          onUnreadCountUpdated.apply(user);
+            // FIXME: unread count could not be observable for now.
+            // onUnreadCountUpdated.apply(user);
+
+            var router = container.lookup('router:main');
+            var stream = container.lookup("service:stream");
+            var store = container.lookup("service:store");
+
+            stream.on("event", function(e, data) {
+              switch (data.type) {
+                case "message_created":
+                  // onUnreadCountUpdated.apply(user);
+                  onMessageCreated(user, store, router, data.data);
+                  break;
+              }
+            });
+          });
         });
       })();
     CODE

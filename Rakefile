@@ -13,13 +13,12 @@ require 'ib'
 
 Motion::Project::App.setup do |app|
   # Use `rake config' to see complete project settings.
-  app.codesign_for_release = true
-  app.codesign_certificate = 'Developer ID Application: Shunsuke Michii (VNS7H9UXPP)'
-  app.deployment_target = '10.8'
+  app.codesign_for_release = false
+  app.deployment_target = '10.10'
   app.name = 'Butter'
   app.icon = 'icon.icns'
   app.identifier = 'jp.harukasan.butter'
-  app.version = '0.2.1'
+  app.version = '0.3.0'
   app.frameworks << 'WebKit'
 end
 
