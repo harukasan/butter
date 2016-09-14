@@ -8,6 +8,8 @@ class MainController < NSWindowController
       return false
     when "notificationMode"
       return false
+    when "setBadge:"
+      return false
     else
       return true
     end
@@ -19,6 +21,8 @@ class MainController < NSWindowController
       return "notify"
     when "notificationMode"
       return "notificationMode"
+    when "setBadge:"
+      return "setBadge"
     end
   end
 
@@ -35,6 +39,7 @@ class MainController < NSWindowController
     setWindowFrameAutosaveName "MainWindow"
     initWebView
 
+    NSUserNotificationCenter.defaultUserNotificationCenter.delegate = self
     self
   end
 
@@ -48,7 +53,7 @@ class MainController < NSWindowController
     @web_view.setUIDelegate self
     @web_view.setPolicyDelegate self
 
-    url = NSURL.URLWithString "https://idobata.io/users/sign_in"
+    url = NSURL.URLWithString "https://idobata.io/#/"
     request = NSURLRequest.requestWithURL url
     @web_view.mainFrame.loadRequest request
   end
@@ -57,25 +62,17 @@ class MainController < NSWindowController
     data = BW::JSON.parse data.to_s.dataUsingEncoding(NSUTF8StringEncoding)
 
     notification = NSUserNotification.alloc.init.tap do |n|
-      n.title = "#{data['sender_name']} \u25b8 #{data['room_name']}"
-      n.informativeText = data['body_plain']
+      n.title = "#{data['sender']} \u25b8 #{data['roomName']}"
+      n.informativeText = data['text']
       n.soundName = NSUserNotificationDefaultSoundName
-      keys = [
-        "organization_slug",
-        "room_name",
-      ]
-      n.userInfo = data.select {|key, val| keys.include? key }
+      n.userInfo = { "url" => data['url'] }
     end
 
-    sender_icon_url = data['sender_icon_url']
-    if sender_icon_url.length > 0
+    sender_icon_url = data['iconUrl']
+    if sender_icon_url
       notification.contentImage = fetchIconImage sender_icon_url
     end
-
-    NSUserNotificationCenter.defaultUserNotificationCenter.tap do |center|
-      center.delegate = self
-      center.deliverNotification notification
-    end
+    NSUserNotificationCenter.defaultUserNotificationCenter.deliverNotification notification
   end
 
   def notificationMode
@@ -87,6 +84,11 @@ class MainController < NSWindowController
     when 2 then "mention"
     when 3 then "off"
     end
+  end
+
+  def setBadge(label)
+    label = (label.to_i == 0) ? "" : label.to_i.to_s
+    NSApplication.sharedApplication.dockTile.setBadgeLabel label
   end
 
   def fetchIconImage(url)
@@ -104,46 +106,75 @@ class MainController < NSWindowController
     return image
   end
 
-  def locateToRoom(organization, room_name)
+  def locateTo(url)
     window_object = @web_view.windowScriptObject
     window_object.evaluateWebScript <<-CODE
-      location.href = "#/organization/#{organization}/room/#{room_name}";
+      location.href = '#{url}';
     CODE
     @web_view.display
   end
 
   # called when frame loading finished
-  def webView(sender, didFinishLoadForFrame:frame)
+  def webView(sender, didStartProvisionalLoadForFrame:frame)
     sender.windowScriptObject.evaluateWebScript <<-CODE
       (function(){
-        var onMessageCreated = function(data){
+        var onMessageCreated = function(user, store, router, data) {
           var notify = false;
           var mode = window.butter.notificationMode();
           if (mode == "all") {
             notify = true;
           } else if (mode == "mention") {
-            if (data.message.mentions.indexOf(parseInt(window.Idobata.user.id)) >= 0) {
+            if (data.message.mentions.indexOf(parseInt(user.get('id'))) >= 0) {
               notify = true;
             }
           }
           if (notify) {
-            butter.notify(JSON.stringify(data.message));
+            store.find('message', data.message.id).then(function(message) {
+              var roomUrl = '/' + router.generate('room.index', message.get('room'));
+              var roomName = message.get('room.organization.name').toString() + ' / ' + message.get('room.name').toString();
+              var payload = {
+                sender: data.message.sender_name,
+                roomName: roomName,
+                text: data.message.body_plain,
+                iconUrl: data.message.sender_icon_url,
+                url: roomUrl
+              };
+              window.butter.notify(JSON.stringify(payload));
+            });
           }
         };
 
-        var bindEvent = function(){
-          if (!window.Idobata.pusher) {
-            return false;
-          }
-          window.Idobata.pusher.bind('message_created', onMessageCreated);
-          return true;
-        };
+        var onUnreadCountUpdated = function() {
+          window.butter.setBadge(this.get('totalUnreadMessagesCount'));
+        }
 
-        setTimeout(function setBind(){
-          if (!bindEvent()) {
-            setTimeout(setBind, 100);
-          }
-        }, 100);
+        window.addEventListener('ready.idobata', function(e) {
+          var container = e.detail.container;
+          var session = container.lookup('service:session');
+
+          session.addObserver('user', function() {
+            var user = this.get('user');
+            if (!user) {
+              return;
+            }
+
+            // FIXME: unread count could not be observable for now.
+            // onUnreadCountUpdated.apply(user);
+
+            var router = container.lookup('router:main');
+            var stream = container.lookup("service:stream");
+            var store = container.lookup("service:store");
+
+            stream.on("event", function(e, data) {
+              switch (data.type) {
+                case "message_created":
+                  // onUnreadCountUpdated.apply(user);
+                  onMessageCreated(user, store, router, data.data);
+                  break;
+              }
+            });
+          });
+        });
       })();
     CODE
   end
@@ -160,7 +191,11 @@ class MainController < NSWindowController
 
   def webView(sender, decidePolicyForNavigationAction:info, request:request, frame:frame, decisionListener:listener)
     host = request.URL.host
-    return listener.use if !host or host == Host
+
+    # ignore on navigate to local file (idobata.io is not supported local file link)
+    return listener.ignore if request.URL.isFileURL
+
+    return listener.use if !host or host == Host or sender.mainFrame != frame
 
     NSWorkspace.sharedWorkspace.openURL request.URL
     listener.ignore
@@ -172,7 +207,7 @@ class MainController < NSWindowController
 
   def webView(sender, runJavaScriptAlertPanelWithMessage:message, initiatedByFrame:frame)
     puts "ALERT: #{message}"
-    NSRunAlertPanel "alert", message, "OK", nil, nil
+    # NSRunAlertPanel "alert", message, "OK", nil, nil
   end
 
   def webView(sender, runJavaScriptConfirmPanelWithMessage:message, initiatedByFrame:frame)
@@ -187,6 +222,7 @@ class MainController < NSWindowController
 
     dialog.beginSheetModalForWindow window, completionHandler: Proc.new {|result|
       files = dialog.filenames
+      break listener.cancel unless result == NSOKButton
       break listener.cancel unless files.size > 0
       filename = files.objectAtIndex 0
       listener.chooseFilename filename
@@ -199,7 +235,7 @@ class MainController < NSWindowController
 
   def userNotificationCenter(center, didActivateNotification:notification)
     info = notification.userInfo
-    locateToRoom info["organization_slug"], info["room_name"]
+    locateTo info['url']
     center.removeDeliveredNotification notification
   end
 end
