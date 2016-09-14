@@ -158,8 +158,8 @@ class MainController < NSWindowController
               return;
             }
 
-            this.addObserver('totalUnreadMessagesCount', onUnreadCountUpdated);
-            onUnreadCountUpdated.apply(user);
+            // FIXME: unread count could not be observable for now.
+            // onUnreadCountUpdated.apply(user);
 
             var router = container.lookup('router:main');
             var stream = container.lookup("service:stream");
@@ -168,6 +168,7 @@ class MainController < NSWindowController
             stream.on("event", function(e, data) {
               switch (data.type) {
                 case "message_created":
+                  // onUnreadCountUpdated.apply(user);
                   onMessageCreated(user, store, router, data.data);
                   break;
               }
